@@ -3,7 +3,8 @@
 
 . $PSScriptRoot\Add-CalendarMeeting.ps1
 
-. $PSScriptRoot\Get-CalendarItems.ps1
+. $PSScriptRoot\Get-iCal.ps1
 
 Export-ModuleMember -Function Add-CalendarMeeting
-Export-ModuleMember -Function Get-CalendarItems
+Export-ModuleMember -Function Get-iCal
+
