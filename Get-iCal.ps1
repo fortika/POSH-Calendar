@@ -10,9 +10,6 @@
 	.PARAMETER URI
         URL to iCal data to read
 
-	.PARAMETER AppendLocation
-        Appends the string to the location property
-
 	.PARAMETER ExtraWebRequestParams
         A hashtable with additional parameters that are added to Invoke-WebRequest.
 
@@ -30,6 +27,9 @@
 
     .PARAMETER AppendEventDataToBody
         Appends the iCal Event data to meeting body
+
+    .PARAMETER Sensitivity
+        Adds Sensitivity property to the output object.
 
 	.EXAMPLE
         Get-iCal -Path d:\calendar\mycalendar.ics | Add-CalendarMeeting -whatif
@@ -72,10 +72,6 @@ Function Get-iCal {
 		[string]$URI
 
 		,[Parameter(Mandatory=$False
-                   ,HelpMessage="Appends the string to the location property")]
-		[string]$AppendLocation
-
-		,[Parameter(Mandatory=$False
                    ,ParameterSetname="URI"
                    ,HelpMessage="Any additional parameters to invoke-webrequest.")]
 		[hashtable]$ExtraWebRequestParams
@@ -89,6 +85,22 @@ Function Get-iCal {
 		[int]$Reminder
 
 		,[Parameter(Mandatory=$False
+                   ,HelpMessage="Pattern to use for the location info")]
+		[string]$LocationPattern="%LOCATION%"
+
+		,[Parameter(Mandatory=$False
+                   ,HelpMessage="Pattern to use for the subject info")]
+		[string]$SubjectPattern="%SUBJECT%"
+
+		,[Parameter(Mandatory=$False
+                   ,HelpMessage="Pattern to use for the body info")]
+		[string]$BodyPattern="%BODY%"
+
+		,[Parameter(Mandatory=$False
+                   ,HelpMessage="Time format to use for expanding variables based on any datetime types in the pattern parameters.")]
+		[string]$TimeFormat="yyyy-MM-dd HH:mm:ss"
+
+		,[Parameter(Mandatory=$False
                    ,HelpMessage="Adds specified time to MeetingStart. Use a negative value to subtract.")]
 		[System.TimeSpan]$AddStartTime=[System.TimeSpan]::Zero
 
@@ -99,7 +111,12 @@ Function Get-iCal {
 		,[Parameter(Mandatory=$False
                    ,HelpMessage="Appends the iCal Event data to meeting body")]
 		[switch]$AppendEventDataToBody
-        
+
+	    ,[Parameter(Mandatory=$False
+                  ,ValueFromPipelineByPropertyName = $True
+                  ,HelpMessage="Sets the sensitivity of the calendar item")]
+        [ValidateSet('Normal','Personal','Private','Confidential')]
+        [string]$Sensitivity = 'Normal' # https://msdn.microsoft.com/VBA/Outlook-VBA/articles/olsensitivity-enumeration-outlook        
     )
 
     # # Generated with New-FortikaPSFunction -name Get-iCal -Params @{Path=@{Type="string"; Parameter=@{Mandatory=$True; ParameterSetName="Path"}; }; URI=@{Type="string"; Parameter=@{Mandatory=$True; ParameterSetName="URI"}}   }
@@ -140,11 +157,18 @@ Function Get-iCal {
             Throw "iCal data is not on supported format!"
         }
 
-        if($AppendLocation) {
-            $AppendLocation = " "+$AppendLocation
+        if($AppendEventDataToBody) {
+            $BodyPattern += "%EVENTDATA%"
         }
 
-
+        # Build a hashtable to easier be able to apply the variable replacements
+        # Format:
+        #   <property in $CalObject> = <pattern string>
+        $PropertyPatternTable = @{
+            Body=$BodyPattern;
+            Location=$LocationPattern;
+            Subject=$SubjectPattern;
+        }
     }
 
     PROCESS {
@@ -193,8 +217,7 @@ Function Get-iCal {
                         #}
 
                         # handle overrides
-                        if($Reminder) {
-                        
+                        if($Reminder) {                        
                             if ( [bool]($CalObject.psobject.Properties.name -match "Reminder") ) {
                                 $CalObject.Reminder = $Reminder
                             } else {
@@ -202,14 +225,50 @@ Function Get-iCal {
                             }                        
                         }
 
-                        if($AppendEventDataToBody) {
-                            if ( [bool]($CalObject.psobject.Properties.name -match "Body") ) {
-                                $CalObject.Body += $CalObjectStrings -join "`r`n"
+                        if($Sensitivity) {
+                            if ( [bool]($CalObject.psobject.Properties.name -match "Sensitivity") ) {
+                                $CalObject.Sensitivity = $Sensitivity
                             } else {
-                                $CalObject | Add-Member -MemberType NoteProperty -Name "Body" -Value ($CalObjectStrings -join "`r`n")
-                            }
-                        
+                                $CalObject | Add-Member -MemberType NoteProperty -Name "Sensitivity" -Value $Sensitivity
+                            }                        
+
                         }
+
+                        #if($AppendEventDataToBody) {
+                        #    if ( [bool]($CalObject.psobject.Properties.name -match "Body") ) {
+                        #        $CalObject.Body += $CalObjectStrings -join "`r`n"
+                        #    } else {
+                        #        $CalObject | Add-Member -MemberType NoteProperty -Name "Body" -Value ($CalObjectStrings -join "`r`n")
+                        #    }                        
+                        #}
+
+                        
+
+
+                        $PropertyPatternTable.Keys | ForEach-Object {
+                            # Property name is in the hashtable key
+                            $PropertyName = $_
+                            $PropertyPattern = $PropertyPatternTable.Item($PropertyName)
+
+
+                            # ok, so decided not to care if there's any properties missing from the ical data.
+                            # For example, if Subject is missing, then it would be empty anyway, so just create it if
+                            # it does not exist, and apply pattern.
+                            if ( -not [bool]($CalObject.psobject.Properties.name -match $PropertyName) ) {
+                                $CalObject | Add-Member -MemberType NoteProperty -Name $PropertyName -Value ""
+                            }
+
+                            $CalObject.$PropertyName = $PropertyPattern | _Expand-VariablesInString -VariableMappings @{
+                                                                                BODY=$CalObject.Body;
+                                                                                SUBJECT=$CalObject.Subject;
+                                                                                LOCATION=$CalObject.Location;
+                                                                                EVENTDATA=($CalObjectStrings -join "`r`n");
+                                                                                MEETINGSTART=$CalObject.MeetingStart.ToString($TimeFormat);
+                                                                                MEETINGEND=$CalObject.MeetingStart.ToString($TimeFormat);
+                                                                                REMINDER=$CalObject.Reminder;
+                                                                        }
+                        }
+
 
                         # output object
                         $CalObject
@@ -319,3 +378,23 @@ Function Get-iCal {
     }
 }
 
+Function _Expand-VariablesInString {
+    [cmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True
+                  ,ValueFromPipeline=$True)]
+        [string]$Inputstring,
+
+        [Parameter(Mandatory=$True)]
+        [hashtable]$VariableMappings
+    )
+
+
+    foreach($key in $Variablemappings.Keys) {
+
+        $InputString = $Inputstring.Replace("%"+$key+"%",$VariableMappings[$key])
+    }
+
+
+    return $Inputstring
+}
