@@ -81,57 +81,64 @@ Param(
         ValueFromPipelineByPropertyName = $True,
         HelpMessage="Please provide a subject of your calendar item.")]
     [Alias('sub')]
-    [string]$Subject,
+    [string]$Subject
 
-    [Parameter(
+    ,[Parameter(
         ValueFromPipelineByPropertyName = $True,
         HelpMessage="Please provide a description of your calendar item.")]
     [Alias('bod')]
-    [string]$Body,
+    [string]$Body
 
-    [Parameter(
+    ,[Parameter(
         ValueFromPipelineByPropertyName = $True,
         HelpMessage="Please provide the location of your meeting.")]
     [Alias('loc')]
-    [string]$Location,
+    [string]$Location
 
-	[Parameter(
+	,[Parameter(
         Mandatory=$True,
         ValueFromPipelineByPropertyName = $True)]
-	[datetime]$MeetingStart,
+	[datetime]$MeetingStart
 
-	[Parameter(
+	,[Parameter(
         ValueFromPipelineByPropertyName = $True)]
-	[datetime]$MeetingEnd,
+	[datetime]$MeetingEnd
 
-	[Parameter(
+	,[Parameter(
         ValueFromPipelineByPropertyName = $True)]
-	[int]$MeetingDuration = 30, 
+	[int]$MeetingDuration = 30
 
-    [Parameter(
+    ,[Parameter(
         ValueFromPipelineByPropertyName = $True,
         HelpMessage="Please provide the importance of your meeting.")]
 	[ValidateSet('Normal','Low','High')]
-	[string]$Importance = 'Normal',
+	[string]$Importance = 'Normal'
 
-	[Parameter(
+	,[Parameter(
         ValueFromPipelineByPropertyName = $True)]
 	[ValidateSet('Free','Tentative','Busy','OutOfOffice')]
-	[string]$BusyStatus = 'Busy',
+	[string]$BusyStatus = 'Busy'
 
-    # Parameter to be able to tell function to add an all day event by pipeline.
-    # Switch AllDayEvent is tricky to send over pipeline.
-	[Parameter(
-        ValueFromPipelineByPropertyName = $True)]
+    
+	,[Parameter(Mandatory=$False
+              ,ValueFromPipelineByPropertyName = $True
+              ,HelpMessage="Parameter to be able to tell function to add an all day event by pipeline.")]
     [ValidateSet('AllDay','Normal')]
-    [string]$EventType = 'Normal',
+    [string]$EventType = 'Normal' # Switch AllDayEvent is tricky to send over pipeline.
 
-	[Parameter(Mandatory=$False)]
-	[switch]$AllDayEvent = $false,
+	,[Parameter(Mandatory=$False
+              ,ValueFromPipelineByPropertyName = $True
+              ,HelpMessage="Sets the sensitivity of the calendar item")]
+    [ValidateSet('Normal','Personal','Private','Confidential')]
+    [string]$Sensitivity = 'Normal' # https://msdn.microsoft.com/VBA/Outlook-VBA/articles/olsensitivity-enumeration-outlook
 
-	[switch]$DisableReminder = $False,
 
-	[Parameter(
+	,[Parameter(Mandatory=$False)]
+	[switch]$AllDayEvent = $false
+
+	,[switch]$DisableReminder = $False
+
+	,[Parameter(
         ValueFromPipelineByPropertyName = $True)]
 	[int]$Reminder = 15
 
@@ -160,6 +167,14 @@ Param(
                             'Busy' = 2;
                             'OutofOffice' = 3
                         }
+
+        $SensitivityHash = @{
+                            'Normal' = 0;
+                            'Personal' = 1;
+                            'Private' = 2;
+                            'Confidential' = 3;        
+                        }
+
 
         $outlookProcess = Get-process | ? { $_.Path -like "*outlook.exe"}
         if(-Not $outlookProcess) {
@@ -208,7 +223,8 @@ Param(
             $newCalenderItem.ReminderMinutesBeforeStart = 0
         }
         $newCalenderItem.Importance = $ImportanceHash[$Importance]
-        $newCalenderItem.BusyStatus = $BusyStatusHash[$BusyStatus]        
+        $newCalenderItem.BusyStatus = $BusyStatusHash[$BusyStatus]
+        $newCalenderItem.Sensitivity = $SensitivityHash[$Sensitivity]
 
         $newCalenderItem.Start = $MeetingStart
     
@@ -230,11 +246,13 @@ Param(
             $newCalenderItem.End = $MeetingEnd
         }
 
-        Write-Verbose "Add Meeting. Subject: `"$Subject`". Body: `"$Body`". Location: `"$Location`". AllDayEvent = $($AllDayEvent -or ($EventType -eq 'AllDay')). Meeting start: $MeetingStart. Meeting end: $MeetingEnd. Reminder: $Reminder"
+        Write-Verbose "Add Meeting. Subject: `"$Subject`". Body: `"$Body`". Location: `"$Location`". AllDayEvent = $($AllDayEvent -or ($EventType -eq 'AllDay')). Meeting start: $MeetingStart. Meeting end: $MeetingEnd. Reminder: $Reminder. Sensitivity: $Sensitivity"
+
+        Write-Debug ($newCalenderItem | Out-string)
 
         if($pscmdlet.ShouldProcess("Calendar","Add Meeting. `"$Subject`". $MeetingStart to $MeetingEnd") ) {
             $newCalenderItem.Save()
-        }        
+        }
     }
 }
 
