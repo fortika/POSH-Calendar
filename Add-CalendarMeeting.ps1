@@ -1,80 +1,76 @@
 <#
 	.SYNOPSIS
-        This function and help text is from http://newdelhipowershellusergroup.blogspot.se/2013/08/powershell-and-outlook-create-calendar.html
-        Code slightly modified.
-
-                
-		Just a small Powershell Function to create Outlook Calendar Meeting on the fly.
+        Powershell function to create Outlook Calendar Meeting on the fly.
 
 	.DESCRIPTION
-		If you are a Powershell Scripter or Programmer, then most of your time is spent
-		On the Powershell Console. I want to write a small function which helps me to
-		Create a calendar invites from the Powershell console. So that I can add calendar
-		Invites on the fly and add them as reminder.
+        This function is originally from http://newdelhipowershellusergroup.blogspot.se/2013/08/powershell-and-outlook-create-calendar.html
+        which was written by Aman Dhally, www.amandhally.net
 
-	.PARAMETER  Subject
-		Using -Subject parameter please provide the subject of the calendar meeting.
+        Code slightly modified and extended and help text is re-formatted.
+
+	.PARAMETER Subject
+		The subject of the meeting.
 
 	.PARAMETER  Body
-		Using -Body, you can add a more information in to the calendar invite.
+		The text that goes into the Body of the meeting
 
-	.PARAMETER  Location
+	.PARAMETER Location
 		The location of your Meeting, for example can be meeting room1 or any country.
 
-	.PARAMETER  Importance
-		By Default the importance is set to 2 which is normal
-		You can set to -Importance high by providing 2 as an argument
-    	0 = Low
-    	1 = Normal
-    	2 = High.
+	.PARAMETER Importance
+        The importance of the meeting.
+        Default set to Normal.
 
-
-	.PARAMETER  AllDayEvent
-		If you want to create an all day event mart it as $true.
+	.PARAMETER AllDayEvent
+		Indicates that the event is covering all day
 
     .PARAMETER BusyStatus
-        To set your status to Busy, Free Tenative, or out of office, By default it is set to Busy
-        0 = Free
-        1 = Tentative
-        2 = Busy
-        3 = Out of Office
+        Sets the Busy status.
 
+	.PARAMETER DisableReminder
+		Disables any reminder for the meeting.
+        By default reminders are on.
 
-	.PARAMETER  DisableReminder
-		By Default reminders are enabled. If you don’t want a reminder, specify parameter DisableReminder
+	.PARAMETER MeetingStart
+		Date and time when meeting starts.
 
-	.PARAMETER  MeetingStart
-		Provide the Date and time of meeting to start from.
+    .PARAMETER MeetingEnd
+        Date and time when meeting ends.
+        Can not be specified together with MeetingDuration.
 
 	.PARAMETER  MeetingDuration
-		By default meeting duration is set to 30 Minutes. You can change the duration Of the meeting using -MeetingDuration Parameter.
+		The duration of the meeting in minutes.
+
+    .PARAMETER EventType
+        Used to indicate if the meeting is all day or a "normal" meeting when sending parameters over the pipeline.
+        If not piping in parameters, use the switch AllDayEvent
 
 	.PARAMETER  Reminder
-		'By default you got reminder before 15 minutes of meting starts. 
-         You can use -Reminder to set the reminder duration. The value is in Minutes.'
+        The number of minutes befre meeting start that triggers the reminder.
 
 	.EXAMPLE
-		PS C:\>Add-CalendarMeeting -Subject "Powershell" -Body "Show how to use Powershell with Outlook" -Location "Conf Room 1" -AllDayEvent -DisableReminder
+		Add-CalendarMeeting -Subject "Powershell" -Body "Show how to use Powershell with Outlook" -Location "Conf Room 1" -AllDayEvent -DisableReminder
 		
 	.EXAMPLE
-		PS C:\>Add-CalendarMeeting -Subject "Powershell" -Body "Show how to use Powershell with Outlook" -Location "Conf Room 1" -MeetingStart "08/08/2013 22:30" -Reminder 30 
+		Add-CalendarMeeting -Subject "Powershell" -Body "Show how to use Powershell with Outlook" -Location "Conf Room 1" -MeetingStart "08/08/2013 22:30" -Reminder 30 
 	
-
 	.EXAMPLE
-		PS C:\>Add-CalendarMeeting -Subject "Powershell" -Body "Show how to use Powershell with Outlook" -Location "Conf Room 1" -Importance 'High'
+		Add-CalendarMeeting -Subject "Powershell" -Body "Show how to use Powershell with Outlook" -Location "Conf Room 1" -Importance 'High'
 
+    .EXAMPLE
+        "MeetingStart;MeetingEnd;Subject`r`n2017-05-01 15:00;2017-05-01 17:00;Test`r`n" | ConvertFrom-Csv -Delimiter ";" | Add-CalendarMeeting -WhatIf -Verbose -Debug
+
+        Adds a calendar meeting from a CSV string.
+        Headers in CSV must match parameter names.
 
 	.NOTES
-        I worte this function for adding a quick calender meeting.
-        in this fucntion you can't add anyone and sent invites to someone.
-        In next version of the same function , i will add these functionality.
-        Thanks : Aman Dhally {amandhally@gmail.com}
+        This function is from http://newdelhipowershellusergroup.blogspot.se/2013/08/powershell-and-outlook-create-calendar.html
+        which was written by Aman Dhally www.amandhally.net
+
+        Code slightly modified and extended and help text is re-formatted.
 
 	.LINK
-		www.amandhally.net
 
-	.LINK
-		www.
 #>
 Function Add-CalendarMeeting {
 [cmdletBinding(SupportsShouldProcess=$true,
@@ -130,7 +126,7 @@ Param(
     [ValidateSet('AllDay','Normal')]
     [string]$EventType = 'Normal',
 
-	[Parameter()]
+	[Parameter(Mandatory=$False)]
 	[switch]$AllDayEvent = $false,
 
 	[switch]$DisableReminder = $False,
