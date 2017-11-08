@@ -188,7 +188,7 @@ Param(
         # This should perhaps be done with Parameter sets instead
         # Currently verification in PROCESS because checks also done on piped in data.
 	    if ( ($AllDayEvent -or $EventType -eq 'AllDay') -And -Not $MeetingEnd) {
-		    Throw "If an all day event is specified MeeintEnd must also be set!"
+		    Throw "If an all day event is specified MeetingEnd must also be set!"
 	    }
 
         # Check with BoundParameters because parameter MeetingDuration has a default value set.
