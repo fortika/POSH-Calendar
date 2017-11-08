@@ -153,7 +153,10 @@ Function Get-iCal {
 
         }
 
-        if( -not ($Data[0] -eq "BEGIN:VCALENDAR" -and $Data[1] -eq "VERSION:2.0")  ) {
+        #if( -not ($Data[0] -eq "BEGIN:VCALENDAR" -and $Data[1] -eq "VERSION:2.0")  ) {
+        #    Throw "iCal data is not on supported format!"
+        #}
+        if( -not ($Data[0] -eq "BEGIN:VCALENDAR" )  ) {
             Throw "iCal data is not on supported format!"
         }
 
@@ -294,9 +297,19 @@ Function Get-iCal {
                             if ( [bool]($CalObject.psobject.Properties.name -match "MeetingStart") ) {
                                 Write-Warning "There's already a property named MeetingStart in object!"
                             } else {
-                                # somehow cant get dates on format 20171031T141500Z to parse correctly...
-                                $d = [datetime]::Parse( ($ItemData -replace "(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(.*)",'$1-$2-$3 $4:$5:$6') )
-                                $d = $d + $AddStartTime
+                                # this is a bit ugly...
+                                # $ItemData might be TZID=Europe/Stockholm:20171114T100000
+                                # split the $ItemData and try and parse each item as a date to find the date...
+                                foreach($item in $ItemData.split(':')) {
+                                    
+                                    try {
+                                        # somehow cant get dates on format 20171031T141500Z to parse correctly...
+                                        $d = [datetime]::Parse( ($Item -replace "(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(.*)",'$1-$2-$3 $4:$5:$6') )
+                                        $d = $d + $AddStartTime
+                                        break
+                                    } catch {
+                                    }
+                                }
 
                                 $CalObject | Add-Member -MemberType NoteProperty -Name "MeetingStart" -Value $d
                             }
@@ -305,10 +318,18 @@ Function Get-iCal {
                             if ( [bool]($CalObject.psobject.Properties.name -match "MeetingEnd") ) {
                                 Write-Warning "There's already a property named MeetingEnd in object!"
                             } else {
-                                # somehow cant get dates on format 20171031T141500Z to parse correctly...
-                                $d = [datetime]::Parse( ($ItemData -replace "(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(.*)",'$1-$2-$3 $4:$5:$6') )
-                                $d = $d + $AddEndTime
 
+                                foreach($item in $ItemData.split(':')) {
+                                    
+                                    try {
+                                        # somehow cant get dates on format 20171031T141500Z to parse correctly...
+                                        $d = [datetime]::Parse( ($Item -replace "(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(.*)",'$1-$2-$3 $4:$5:$6') )
+                                        $d = $d + $AddEndTime
+                                        break
+                                    } catch {
+                                    }
+                                }
+                
                                 $CalObject | Add-Member -MemberType NoteProperty -Name "MeetingEnd" -Value $d
                             }
                         
@@ -317,6 +338,17 @@ Function Get-iCal {
                             if ( [bool]($CalObject.psobject.Properties.name -match "Location") ) {
                                 Write-Warning "There's already a property named Location in object!"
                             } else {
+
+                                # LOCATION can also be multi-line
+                                # See DESCRIPTION
+
+                                $tmpIndex = $Index
+                                
+                                while( $Data[++$tmpIndex] -match "^ .*" ) {
+                                    # skip the first character in string
+                                    $ItemData = $ItemData + $Data[$tmpIndex].SubString(1)                                    
+                                }
+                                
                                 $CalObject | Add-Member -MemberType NoteProperty -Name "Location" -Value ${ItemData}${AppendLocation}
                             }
                         }
@@ -348,7 +380,26 @@ Function Get-iCal {
                             if ( [bool]($CalObject.psobject.Properties.name -match $CalProperty ) ) {
                                 Write-Warning ("There's already a property named {0} in object!" -f $CalProperty)
                             } else {
-                                $CalObject | Add-Member -MemberType NoteProperty -Name $CalProperty -Value $ItemData                            
+
+                                # look further into $data to see if description is multi-line-
+                                # multi-line descriptions seems to start next line with a space.
+                                # DESCRIPTION:This is\n
+                                #  a multi-line\n
+                                #  description\n
+                                # \n seems to be line terminators.
+                                # There also seems to be wrapped lines that does not have line terminators
+                                # DESCRIPTION:This is\n
+                                #  a wrapped multi-line
+                                #  description\n
+
+                                $tmpIndex = $Index
+
+                                while( $Data[++$tmpIndex] -match "^ .*" ) {
+                                    # skip the first character in string
+                                    $ItemData = $ItemData + $Data[$tmpIndex].SubString(1)                                    
+                                }
+
+                                $CalObject | Add-Member -MemberType NoteProperty -Name $CalProperty -Value $ItemData.replace('\n','`r`n')
                             }
                         
                         }
@@ -398,3 +449,6 @@ Function _Expand-VariablesInString {
 
     return $Inputstring
 }
+
+
+
